@@ -1,8 +1,12 @@
-import webbrowser
 from flask import Flask, request, render_template_string
-import os
+import webbrowser
+from threading import Thread, Event
+import time
 
 app = Flask(__name__)
+
+stop_event = Event()
+lines = []
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -19,7 +23,7 @@ HTML_TEMPLATE = """
         {% endfor %}
     </ul>
     <h2>Ввод данных пользователем</h2>
-    <form method="POST">
+    <form method="POST" onsubmit="try { window.close(); } catch(e) { console.log('Browser preventing closing'); }">
         <input type="text" name="user_input" required>
         <button type="submit">OK</button>
     </form>
@@ -38,14 +42,15 @@ def form_post():
         for line in lines:
             f.write(line + '\n')
         f.write(user_input + '\n')
-    shutdown_server() # Завершение работы фласка
+    stop_event.set() # Остановка фласка
     return 'Data saved. Server shutting down.'
 
-def shutdown_server():
-    func = request.environ.get('werkzeug.server.shutdown')
-    if func is None:
-        raise RuntimeError('Not running with the Werkzeug Server')
-    func()
+def run_server():
+    app.run(debug=False, use_reloader=False)
+
+def open_browser():
+    time.sleep(1)
+    webbrowser.open_new('http://127.0.0.1:5000/')
 
 if __name__ == '__main__':
     input_file_path = 'input.txt' # Путь к файлу с данными для формы
@@ -54,5 +59,11 @@ if __name__ == '__main__':
     with open(input_file_path, 'r') as file:
         lines = [line.strip() for line in file.readlines()]
 
-    webbrowser.open_new('http://127.0.0.1:5000/')
-    app.run()
+    server_thread = Thread(target=run_server)
+    server_thread.start()
+
+    open_browser()
+
+    stop_event.wait()
+
+    print("Flask has been stopped")
