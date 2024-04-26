@@ -2,11 +2,13 @@ from flask import Flask, request, render_template_string
 import webbrowser
 from threading import Thread, Event
 import time
+import logging
 
 app = Flask(__name__)
-
 stop_event = Event()
 lines = []
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -38,10 +40,15 @@ def form():
 @app.route('/', methods=['POST'])
 def form_post():
     user_input = request.form['user_input']
-    with open(output_file_path, 'w') as f:
-        for line in lines:
-            f.write(line + '\n')
-        f.write(user_input + '\n')
+    try:    
+        with open(output_file_path, 'w') as f:
+            for line in lines:
+                f.write(line + '\n')
+            f.write(user_input + '\n')
+        logger.info("Data saved successfully.")
+    except IOError as e:
+        logger.error(f"Failed to write to file: {e}")
+        return f"Error saving data: {e}"
     stop_event.set() # Остановка фласка
     return 'Data saved. Server shutting down.'
 
@@ -56,8 +63,12 @@ if __name__ == '__main__':
     input_file_path = 'input.txt' # Путь к файлу с данными для формы
     output_file_path = 'output.txt' # Путь к файлу с данными из формы
 
-    with open(input_file_path, 'r') as file:
-        lines = [line.strip() for line in file.readlines()]
+    try:
+        with open(input_file_path, 'r') as file:
+            lines.extend(line.strip() for line in file.readlines())
+    except IOError as e:
+        logger.error(f"Failed to read input file: {e}")
+        exit(1)
 
     server_thread = Thread(target=run_server)
     server_thread.start()
